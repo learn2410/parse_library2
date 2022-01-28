@@ -43,8 +43,8 @@ def download_file(url, filepath):
 
 
 def parse_book_page(response):
-    content_block = BeautifulSoup(response.content, 'lxml') \
-        .find('div', attrs={'id': 'content'})
+    selector=".tabs #content"
+    content_block = BeautifulSoup(response.content, 'lxml').select(selector)
     dom = etree.HTML(str(content_block))
     return {
         'text_link': ''.join(dom.xpath('//*/a[starts-with(@href,"/txt.php")]/@href')),
@@ -67,19 +67,15 @@ def parse_rubric_limits(response):
 
 
 def parse_rubric_page(response):
-    content_block = BeautifulSoup(response.content, 'lxml') \
-        .find('div', attrs={'id': 'content'})
-    # book_blocks = content_block.find_all('table', attrs={'class': 'd_book'})
+    selector="table.tabs #content"
+    content_block = BeautifulSoup(response.content, 'lxml').select(selector)
     dom = etree.HTML(str(content_block))
     book_bloks = dom.xpath('//*/table[@class="d_book"]')
     books = [{'book_link': ''.join(book.xpath('tr/td/div[@class="bookimage"]/a[starts-with(@href,"/b")]/@href')),
               'img_link': ''.join(book.xpath('tr/td/div[@class="bookimage"]/a/img/@src')),
-              # 'title': ''.join(book.xpath('tr/td/a/b/text()')).strip(),
-              # 'autor': ''.join(book.xpath('tr/td/a[starts-with(@href,"/a")]/text()')).strip(),
               }
              for book in book_bloks
              ]
-    # pp=parse_rubric_pagecount(response)
     return ({'books': books})
 
 
