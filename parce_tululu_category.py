@@ -43,7 +43,7 @@ def download_file(url, filepath):
 
 
 def parse_book_page(response):
-    selector=".tabs #content"
+    selector = ".tabs #content"
     content_block = BeautifulSoup(response.content, 'lxml').select(selector)
     dom = etree.HTML(str(content_block))
     return {
@@ -67,7 +67,7 @@ def parse_rubric_limits(response):
 
 
 def parse_rubric_page(response):
-    selector="table.tabs #content"
+    selector = "table.tabs #content"
     content_block = BeautifulSoup(response.content, 'lxml').select(selector)
     dom = etree.HTML(str(content_block))
     book_bloks = dom.xpath('//*/table[@class="d_book"]')
@@ -76,7 +76,7 @@ def parse_rubric_page(response):
               }
              for book in book_bloks
              ]
-    return ({'books': books})
+    return {'books': books}
 
 
 def download_book(book_link, rewrite=False):
@@ -102,14 +102,18 @@ def download_book(book_link, rewrite=False):
 
 def create_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('start_page', nargs='?', default=1, type=int)
-    parser.add_argument('end_page', nargs='?', default=4, type=int)
+    parser.add_argument('--start_page', type=int, default=1)
+    parser.add_argument('--end_page', type=int, default=9999)
     return parser
 
 
 def main():
+    url = f'{ROOT_URL}{TARGET_RUBRIC_URL}'
+    limits = parse_rubric_limits(get_response(url))
     parser = create_parser()
     args = parser.parse_args(sys.argv[1:])
+    if args.end_page > limits['max_page_num']:
+        args.end_page = limits['max_page_num']
     if args.end_page <= args.start_page:
         args.end_page = args.start_page
         print(f'скачивание книг со страницы {args.start_page}')
@@ -117,8 +121,6 @@ def main():
         print(f'скачивание книг со страниц от {args.start_page} до {args.end_page}')
     os.makedirs(os.path.join(LIB_DIR, TEXTS_SUBDIR), exist_ok=True)
     os.makedirs(os.path.join(LIB_DIR, IMAGES_SUBDIR), exist_ok=True)
-    url = f'{ROOT_URL}{TARGET_RUBRIC_URL}'
-    # url='https://tululu.org/l74/'
     json_path = os.path.join(LIB_DIR, 'catalog.json')
     if os.path.exists(json_path) and os.path.isfile(json_path):
         with open(json_path, 'r') as file:
@@ -127,7 +129,7 @@ def main():
         catalog = {}
     start_page = args.start_page
     end_page = args.end_page
-    progressbar=tqdm(total=(end_page - start_page + 1) * 25)
+    progressbar = tqdm(total=(end_page - start_page + 1) * 25)
     for page in range(start_page, end_page + 1):
         response = get_response(f'{url}{page}')
         for book in parse_rubric_page(response)['books']:
@@ -141,6 +143,7 @@ def main():
         with open(json_path, 'w') as file:
             json.dump(catalog, file, ensure_ascii=False, indent=2)
     print('*** работа завершена ***')
+
 
 if __name__ == '__main__':
     main()
