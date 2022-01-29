@@ -1,7 +1,7 @@
+import argparse
 import json
 import os
 import sys
-import argparse
 from urllib.parse import urlparse
 
 import requests
@@ -77,11 +77,11 @@ def download_book(book_link, rewrite=False, skip_txt=False, skip_img=False):
     book = parse_book_page(get_response(book_link))
     if not book["text_link"]:
         return {}
-    book_filepath = os.path.join(LIB_DIR, TEXTS_SUBDIR, sanitize_filename(f'{book["title"]}.txt'))
+    book_filepath = os.path.normcase(os.path.join(LIB_DIR, TEXTS_SUBDIR, sanitize_filename(f'{book["title"]}.txt')))
     if not skip_txt and (not os.path.exists(book_filepath) or not rewrite):
         download_file(f'{ROOT_URL}{book["text_link"]}', book_filepath)
     img_filename = urlparse(ROOT_URL + book['img_link']).path.split('/')[-1]
-    img_filepath = os.path.join(LIB_DIR, IMAGES_SUBDIR, sanitize_filename(f'{img_filename}'))
+    img_filepath = os.path.normcase(os.path.join(LIB_DIR, IMAGES_SUBDIR, sanitize_filename(f'{img_filename}')))
     if not skip_img and (not os.path.exists(img_filepath) or not rewrite):
         download_file(f'{ROOT_URL}{book["img_link"]}', img_filepath)
     return {book['book_link']: {
@@ -99,30 +99,19 @@ parser = argparse.ArgumentParser()
 
 def arg_dest_folder(path):
     global LIB_DIR
-    global JSON_PATH
-    path = os.path.normpath(path)
+    path = os.path.normcase(path)
     if LIB_DIR != path:
         LIB_DIR = path
-        JSON_PATH = os.path.join(LIB_DIR, 'catalog.json')
-    os.makedirs(os.path.join(LIB_DIR, TEXTS_SUBDIR), exist_ok=True)
-    os.makedirs(os.path.join(LIB_DIR, IMAGES_SUBDIR), exist_ok=True)
-    if os.path.isdir(path):
-        return path
-    else:
-        raise NotADirectoryError(path)
 
 
 def arg_json_path(path):
     global JSON_PATH
-    if not path:
-        path = os.path.join(LIB_DIR, 'catalog.json')
-        path = os.path.normpath(path)
     if os.path.splitext(path)[1] != '.json':
         parser.error("тип файла длжен быть .json")
+    path = os.path.normcase(path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    if JSON_PATH != path:
-        JSON_PATH = path
-    return JSON_PATH
+    JSON_PATH = path
+    return path
 
 
 def parser_addargs():
@@ -130,11 +119,12 @@ def parser_addargs():
     parser.add_argument('--end_page', type=int, default=9999)
     parser.add_argument('--skip_imgs', action='store_true')
     parser.add_argument('--skip_txt', action='store_true')
-    parser.add_argument('--dest_folder', type=arg_dest_folder, default=LIB_DIR)
-    parser.add_argument('--json_path', type=arg_json_path, default='')
+    parser.add_argument('--dest_folder', type=arg_dest_folder)
+    parser.add_argument('--json_path', type=arg_json_path)
 
 
 def main():
+    global JSON_PATH
     url = f'{ROOT_URL}{TARGET_RUBRIC_URL}'
     limits = parse_rubric_limits(get_response(url))
     parser_addargs()
@@ -146,6 +136,10 @@ def main():
         print(f'скачивание книг со страницы {args.start_page}')
     else:
         print(f'скачивание книг со страниц от {args.start_page} до {args.end_page}')
+    os.makedirs(os.path.join(LIB_DIR, TEXTS_SUBDIR), exist_ok=True)
+    os.makedirs(os.path.join(LIB_DIR, IMAGES_SUBDIR), exist_ok=True)
+    if not JSON_PATH:
+        JSON_PATH = os.path.join(LIB_DIR, 'catalog.json')
     if os.path.exists(JSON_PATH) and os.path.isfile(JSON_PATH):
         with open(JSON_PATH, 'r') as file:
             catalog = json.load(file)
