@@ -15,6 +15,7 @@ TARGET_RUBRIC_URL = "/l55/"
 LIB_DIR = 'library/'
 TEXTS_SUBDIR = 'books/'
 IMAGES_SUBDIR = 'images/'
+JSON_PATH = ''
 
 
 def check_for_redirect(response):
@@ -33,13 +34,6 @@ def download_file(url, filepath):
     response = get_response(url)
     with open(filepath, 'wb') as file:
         file.write(response.content)
-    # if 'text/plain' in response.headers['Content-Type']:
-    #     # print(filepath,response.headers['Content-Type'])
-    #     with open(filepath, 'w') as file:
-    #         file.write(response.text)
-    # else:
-    #     with open(filepath, 'wb') as file:
-    #         file.write(response.content)
 
 
 def parse_book_page(response):
@@ -79,16 +73,16 @@ def parse_rubric_page(response):
     return {'books': books}
 
 
-def download_book(book_link, rewrite=False):
+def download_book(book_link, rewrite=False, skip_txt=False, skip_img=False):
     book = parse_book_page(get_response(book_link))
     if not book["text_link"]:
         return {}
     book_filepath = os.path.join(LIB_DIR, TEXTS_SUBDIR, sanitize_filename(f'{book["title"]}.txt'))
-    if not os.path.exists(book_filepath) or not rewrite:
+    if not skip_txt and (not os.path.exists(book_filepath) or not rewrite):
         download_file(f'{ROOT_URL}{book["text_link"]}', book_filepath)
     img_filename = urlparse(ROOT_URL + book['img_link']).path.split('/')[-1]
     img_filepath = os.path.join(LIB_DIR, IMAGES_SUBDIR, sanitize_filename(f'{img_filename}'))
-    if not os.path.exists(img_filepath) or not rewrite:
+    if not skip_img and (not os.path.exists(img_filepath) or not rewrite):
         download_file(f'{ROOT_URL}{book["img_link"]}', img_filepath)
     return {book['book_link']: {
         'title': book['title'],
@@ -100,17 +94,50 @@ def download_book(book_link, rewrite=False):
     }}
 
 
-def create_parser():
-    parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser()
+
+
+def arg_dest_folder(path):
+    global LIB_DIR
+    global JSON_PATH
+    path = os.path.normpath(path)
+    if LIB_DIR != path:
+        LIB_DIR = path
+        JSON_PATH = os.path.join(LIB_DIR, 'catalog.json')
+    os.makedirs(os.path.join(LIB_DIR, TEXTS_SUBDIR), exist_ok=True)
+    os.makedirs(os.path.join(LIB_DIR, IMAGES_SUBDIR), exist_ok=True)
+    if os.path.isdir(path):
+        return path
+    else:
+        raise NotADirectoryError(path)
+
+
+def arg_json_path(path):
+    global JSON_PATH
+    if not path:
+        path = os.path.join(LIB_DIR, 'catalog.json')
+        path = os.path.normpath(path)
+    if os.path.splitext(path)[1] != '.json':
+        parser.error("тип файла длжен быть .json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if JSON_PATH != path:
+        JSON_PATH = path
+    return JSON_PATH
+
+
+def parser_addargs():
     parser.add_argument('--start_page', type=int, default=1)
     parser.add_argument('--end_page', type=int, default=9999)
-    return parser
+    parser.add_argument('--skip_imgs', action='store_true')
+    parser.add_argument('--skip_txt', action='store_true')
+    parser.add_argument('--dest_folder', type=arg_dest_folder, default=LIB_DIR)
+    parser.add_argument('--json_path', type=arg_json_path, default='')
 
 
 def main():
     url = f'{ROOT_URL}{TARGET_RUBRIC_URL}'
     limits = parse_rubric_limits(get_response(url))
-    parser = create_parser()
+    parser_addargs()
     args = parser.parse_args(sys.argv[1:])
     if args.end_page > limits['max_page_num']:
         args.end_page = limits['max_page_num']
@@ -119,11 +146,8 @@ def main():
         print(f'скачивание книг со страницы {args.start_page}')
     else:
         print(f'скачивание книг со страниц от {args.start_page} до {args.end_page}')
-    os.makedirs(os.path.join(LIB_DIR, TEXTS_SUBDIR), exist_ok=True)
-    os.makedirs(os.path.join(LIB_DIR, IMAGES_SUBDIR), exist_ok=True)
-    json_path = os.path.join(LIB_DIR, 'catalog.json')
-    if os.path.exists(json_path) and os.path.isfile(json_path):
-        with open(json_path, 'r') as file:
+    if os.path.exists(JSON_PATH) and os.path.isfile(JSON_PATH):
+        with open(JSON_PATH, 'r') as file:
             catalog = json.load(file)
     else:
         catalog = {}
@@ -134,13 +158,17 @@ def main():
         response = get_response(f'{url}{page}')
         for book in parse_rubric_page(response)['books']:
             try:
-                catalog.update(download_book(f'{ROOT_URL}{book["book_link"]}'))
+                catalog.update(
+                    download_book(f'{ROOT_URL}{book["book_link"]}',
+                                  skip_txt=args.skip_txt,
+                                  skip_img=args.skip_imgs)
+                )
             except requests.exceptions.HTTPError:
                 pass
             progressbar.update(1)
     progressbar.close()
     if len(catalog) > 0:
-        with open(json_path, 'w') as file:
+        with open(JSON_PATH, 'w') as file:
             json.dump(catalog, file, ensure_ascii=False, indent=2)
     print('*** работа завершена ***')
 
