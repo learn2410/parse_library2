@@ -3,7 +3,6 @@ import json
 import os
 import sys
 from urllib.parse import urlparse
-from time import sleep
 
 import requests
 from bs4 import BeautifulSoup
