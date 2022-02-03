@@ -124,18 +124,18 @@ def main():
         catalog = {}
     print('--- составляю список книг со страниц')
     progressbar = tqdm(total=(args.end_page - args.start_page + 1))
-    aims = []
+    book_links = []
     for page in range(args.start_page, args.end_page + 1):
         progressbar.update(1)
         try:
             books = parse_rubric_page(get_response(f'{url}{page}'))
-            aims.extend(books)
+            book_links.extend(books)
         except requests.exceptions.HTTPError:
             pass
     progressbar.close()
     print('--- скачиваю книги')
-    progressbar = tqdm(total=len(aims))
-    for book in aims:
+    progressbar = tqdm(total=len(book_links))
+    for book in book_links:
         progressbar.update(1)
         try:
             catalog.update(
